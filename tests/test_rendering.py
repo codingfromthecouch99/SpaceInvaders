@@ -5,6 +5,7 @@ import pytest
 
 from spaceinvaders.constants import INVADER_HEIGHT, INVADER_WIDTH
 from spaceinvaders.rendering import (
+    Renderer,
     create_invader_surface,
     create_mystery_surface,
     draw_player_shape,
@@ -74,3 +75,24 @@ class TestCreateMysterySurface:
             for x in range(40) for y in range(16)
         )
         assert has_colour
+
+
+class TestRenderer:
+    def test_can_construct(self):
+        renderer = Renderer()
+        assert renderer.screen is not None
+
+    def test_draw_title_state(self):
+        """Renderer.draw should not raise for title state."""
+        from spaceinvaders.engine import GameEngine
+        renderer = Renderer()
+        engine = GameEngine()
+        renderer.draw(engine)  # state == "title"
+
+    def test_draw_playing_state(self):
+        """Renderer.draw should not raise for playing state."""
+        from spaceinvaders.engine import GameEngine
+        renderer = Renderer()
+        engine = GameEngine()
+        engine.start_game()
+        renderer.draw(engine)  # state == "playing"
