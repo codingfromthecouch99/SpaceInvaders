@@ -1,4 +1,4 @@
-"""Integration tests for Game — state transitions, wave management, collisions."""
+"""Integration tests for GameEngine — state transitions, wave management, collisions."""
 
 import pygame
 import pytest
@@ -10,153 +10,198 @@ from spaceinvaders.constants import (
     SCREEN_WIDTH,
 )
 from spaceinvaders.entities import Bullet, Invader
-from spaceinvaders.game import Game
+from spaceinvaders.engine import GameEngine
 
 
 @pytest.fixture
-def game():
-    g = Game()
-    return g
+def engine():
+    return GameEngine()
 
 
 class TestGameStateTransitions:
-    def test_initial_state_is_title(self, game):
-        assert game.state == "title"
+    def test_initial_state_is_title(self, engine):
+        assert engine.state == "title"
 
-    def test_start_game_transitions_to_playing(self, game):
-        game.start_game()
-        assert game.state == "playing"
+    def test_start_game_transitions_to_playing(self, engine):
+        engine.start_game()
+        assert engine.state == "playing"
 
-    def test_start_game_resets_score(self, game):
-        game.start_game()
-        assert game.score == 0
-        assert game.lives == 3
-        assert game.wave == 1
+    def test_start_game_resets_score(self, engine):
+        engine.start_game()
+        assert engine.score == 0
+        assert engine.lives == 3
+        assert engine.wave == 1
+
+    def test_enter_key_starts_game(self, engine):
+        engine.handle_keydown(pygame.K_RETURN, "\r", 1000)
+        assert engine.state == "playing"
+
+    def test_h_key_opens_high_scores(self, engine):
+        engine.handle_keydown(pygame.K_h, "h", 1000)
+        assert engine.state == "high_scores"
+
+    def test_escape_from_high_scores_returns_to_title(self, engine):
+        engine.state = "high_scores"
+        engine.handle_keydown(pygame.K_ESCAPE, "", 1000)
+        assert engine.state == "title"
+
+    def test_escape_from_playing_returns_to_title(self, engine):
+        engine.start_game()
+        engine.handle_keydown(pygame.K_ESCAPE, "", 1000)
+        assert engine.state == "title"
+
+    def test_escape_from_title_signals_quit(self, engine):
+        result = engine.handle_keydown(pygame.K_ESCAPE, "", 1000)
+        assert result == "quit"
 
 
 class TestWaveManagement:
-    def test_first_wave_creates_invaders(self, game):
-        game.start_game()
-        assert len(game.invaders) == INVADER_COLS * INVADER_ROWS
+    def test_first_wave_creates_invaders(self, engine):
+        engine.start_game()
+        assert len(engine.invaders) == INVADER_COLS * INVADER_ROWS
 
-    def test_next_wave_increments_counter(self, game):
-        game.start_game()
-        assert game.wave == 1
-        game.next_wave()
-        assert game.wave == 2
+    def test_next_wave_increments_counter(self, engine):
+        engine.start_game()
+        assert engine.wave == 1
+        engine.next_wave()
+        assert engine.wave == 2
 
-    def test_next_wave_repopulates_invaders(self, game):
-        game.start_game()
-        game.invaders.empty()
-        assert len(game.invaders) == 0
-        game.next_wave()
-        assert len(game.invaders) == INVADER_COLS * INVADER_ROWS
+    def test_next_wave_repopulates_invaders(self, engine):
+        engine.start_game()
+        engine.invaders.empty()
+        assert len(engine.invaders) == 0
+        engine.next_wave()
+        assert len(engine.invaders) == INVADER_COLS * INVADER_ROWS
 
-    def test_wave_speed_increases(self, game):
-        game.start_game()
-        interval_w1 = game.invader_move_interval
-        game.next_wave()
-        interval_w2 = game.invader_move_interval
+    def test_wave_speed_increases(self, engine):
+        engine.start_game()
+        interval_w1 = engine.invader_move_interval
+        engine.next_wave()
+        interval_w2 = engine.invader_move_interval
         assert interval_w2 <= interval_w1
 
 
 class TestBarriers:
-    def test_barriers_created(self, game):
-        game.start_game()
-        assert len(game.barriers) > 0
+    def test_barriers_created(self, engine):
+        engine.start_game()
+        assert len(engine.barriers) > 0
 
-    def test_barriers_positioned_below_invaders(self, game):
-        game.start_game()
-        for block in game.barriers:
-            assert block.rect.y >= 400  # barriers are at y=470+
+    def test_barriers_positioned_below_invaders(self, engine):
+        engine.start_game()
+        for block in engine.barriers:
+            assert block.rect.y >= 400
 
 
 class TestCollisions:
-    def test_player_bullet_kills_invader(self, game):
-        game.start_game()
-        invader = game.invaders.sprites()[0]
+    def test_player_bullet_kills_invader(self, engine):
+        engine.start_game()
+        invader = engine.invaders.sprites()[0]
         bullet = Bullet(
             invader.rect.centerx, invader.rect.centery,
             -7, is_player=True,
         )
-        game.player_bullets.add(bullet)
-        initial_count = len(game.invaders)
-        game.check_collisions()
-        assert len(game.invaders) == initial_count - 1
+        engine.player_bullets.add(bullet)
+        initial_count = len(engine.invaders)
+        engine.check_collisions()
+        assert len(engine.invaders) == initial_count - 1
 
-    def test_killing_invader_awards_points(self, game):
-        game.start_game()
-        invader = game.invaders.sprites()[0]
+    def test_killing_invader_awards_points(self, engine):
+        engine.start_game()
+        invader = engine.invaders.sprites()[0]
         expected_points = invader.points
         bullet = Bullet(
             invader.rect.centerx, invader.rect.centery,
             -7, is_player=True,
         )
-        game.player_bullets.add(bullet)
-        game.check_collisions()
-        assert game.score == expected_points
+        engine.player_bullets.add(bullet)
+        engine.check_collisions()
+        assert engine.score == expected_points
 
-    def test_invader_bullet_hits_player(self, game):
-        game.start_game()
+    def test_invader_bullet_hits_player(self, engine):
+        engine.start_game()
         bullet = Bullet(
-            game.player.rect.centerx, game.player.rect.centery,
+            engine.player.rect.centerx, engine.player.rect.centery,
             4, is_player=False,
         )
-        game.invader_bullets.add(bullet)
-        game.check_collisions()
-        assert game.lives == 2
+        engine.invader_bullets.add(bullet)
+        engine.check_collisions()
+        assert engine.lives == 2
 
-    def test_player_death_triggers_game_over_at_zero_lives(self, game):
-        game.start_game()
-        game.lives = 1
+    def test_player_death_triggers_game_over_at_zero_lives(self, engine):
+        engine.start_game()
+        engine.lives = 1
         bullet = Bullet(
-            game.player.rect.centerx, game.player.rect.centery,
+            engine.player.rect.centerx, engine.player.rect.centery,
             4, is_player=False,
         )
-        game.invader_bullets.add(bullet)
-        game.check_collisions()
-        assert game.state == "game_over"
+        engine.invader_bullets.add(bullet)
+        engine.check_collisions()
+        assert engine.state == "game_over"
 
-    def test_invaders_reaching_player_triggers_game_over(self, game):
-        game.start_game()
-        for inv in game.invaders:
-            inv.rect.y = game.player.rect.top
-        game.check_collisions()
-        assert game.state == "game_over"
+    def test_invaders_reaching_player_triggers_game_over(self, engine):
+        engine.start_game()
+        for inv in engine.invaders:
+            inv.rect.y = engine.player.rect.top
+        engine.check_collisions()
+        assert engine.state == "game_over"
 
-    def test_death_timer_grants_invulnerability(self, game):
-        game.start_game()
-        game.death_timer = 1000  # invulnerable
+    def test_death_timer_grants_invulnerability(self, engine):
+        engine.start_game()
+        engine.death_timer = 1000
         bullet = Bullet(
-            game.player.rect.centerx, game.player.rect.centery,
+            engine.player.rect.centerx, engine.player.rect.centery,
             4, is_player=False,
         )
-        game.invader_bullets.add(bullet)
-        game.check_collisions()
-        assert game.lives == 3  # no damage taken
+        engine.invader_bullets.add(bullet)
+        engine.check_collisions()
+        assert engine.lives == 3
 
 
 class TestInvaderMovement:
-    def test_invaders_move_after_interval(self, game):
-        game.start_game()
-        inv = game.invaders.sprites()[0]
+    def test_invaders_move_after_interval(self, engine):
+        engine.start_game()
+        inv = engine.invaders.sprites()[0]
         start_x = inv.rect.x
-        game.move_invaders(game.invader_move_interval + 1)
+        engine.move_invaders(engine.invader_move_interval + 1)
         assert inv.rect.x != start_x
 
-    def test_invaders_do_not_move_before_interval(self, game):
-        game.start_game()
-        inv = game.invaders.sprites()[0]
+    def test_invaders_do_not_move_before_interval(self, engine):
+        engine.start_game()
+        inv = engine.invaders.sprites()[0]
         start_x = inv.rect.x
-        game.move_invaders(1)
+        engine.move_invaders(1)
         assert inv.rect.x == start_x
 
-    def test_invaders_drop_and_reverse_at_edge(self, game):
-        game.start_game()
-        # Push all invaders to the right edge
-        for inv in game.invaders:
+    def test_invaders_drop_and_reverse_at_edge(self, engine):
+        engine.start_game()
+        for inv in engine.invaders:
             inv.rect.x = SCREEN_WIDTH - 5
-        start_y = game.invaders.sprites()[0].rect.y
-        game.move_invaders(game.invader_move_interval + 1)
-        assert game.invader_direction == -1
-        assert game.invaders.sprites()[0].rect.y > start_y
+        start_y = engine.invaders.sprites()[0].rect.y
+        engine.move_invaders(engine.invader_move_interval + 1)
+        assert engine.invader_direction == -1
+        assert engine.invaders.sprites()[0].rect.y > start_y
+
+
+class TestNameEntry:
+    def test_typing_name(self, engine):
+        engine.start_game()
+        engine.state = "enter_name"
+        engine.name_input = ""
+        engine.handle_keydown(pygame.K_a, "a", 1000)
+        engine.handle_keydown(pygame.K_c, "c", 1000)
+        engine.handle_keydown(pygame.K_e, "e", 1000)
+        assert engine.name_input == "ace"
+
+    def test_backspace_deletes(self, engine):
+        engine.start_game()
+        engine.state = "enter_name"
+        engine.name_input = "ab"
+        engine.handle_keydown(pygame.K_BACKSPACE, "", 1000)
+        assert engine.name_input == "a"
+
+    def test_name_max_length(self, engine):
+        engine.start_game()
+        engine.state = "enter_name"
+        engine.name_input = "1234567890"
+        engine.handle_keydown(pygame.K_a, "a", 1000)
+        assert len(engine.name_input) == 10  # not 11
